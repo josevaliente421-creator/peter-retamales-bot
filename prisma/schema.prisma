@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus {
+  new
+  contacted
+  engaged
+  scheduled
+  completed
+  no_show
+  lost
+  follow_up
+}
+
+enum ProcedureType {
+  vejez_legal
+  vejez_anticipada
+  sobrevivencia
+  invalidez
+  trabajo_pesado
+  no_sabe
+}
+
+enum BotState {
+  initial
+  awaiting_name
+  awaiting_afp
+  awaiting_funds
+  awaiting_procedure_type
+  awaiting_region
+  awaiting_appointment_type
+  awaiting_datetime
+  confirming
+  completed
+  follow_up
+  human_handoff
+}
+
+enum AppointmentType {
+  video_call
+  in_person
+}
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  completed
+  cancelled
+  no_show
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+model Lead {
+  id             String        @id @default(cuid())
+  name           String?
+  phone          String        @unique
+  email          String?
+  rut            String?
+  source         String?       // meta_ads, whatsapp_direct, referral
+  afp            String?       // Provida, Habitat, Cuprum, Capital, Modelo, Uno, PlanVital
+  estimatedFunds String?       // Ej: "50 millones", "$45.000.000"
+  procedureType  ProcedureType?
+  region         String?       // Región de Chile
+  notes          String?
+  status         LeadStatus    @default(new)
+  botState       BotState      @default(initial)
+  lastContact    DateTime?
+
+  conversations Conversation[]
+  appointments  Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  isActive  Boolean  @default(true)
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      MessageDirection
+  content        String
+  metadata       Json?            // whatsapp message ID, template name, etc.
+  sentAt         DateTime         @default(now())
+
+  createdAt DateTime @default(now())
+}
+
+model Appointment {
+  id               String            @id @default(cuid())
+  leadId           String
+  lead             Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type             AppointmentType
+  status           AppointmentStatus @default(scheduled)
+  startTime        DateTime
+  endTime          DateTime
+  googleEventId    String?           // ID del evento en Google Calendar
+  googleMeetLink   String?           // Link de Meet (si es video_call)
+  location         String?           // Dirección oficina (si es presencial)
+  confirmationSent Boolean           @default(false)
+  reminderSent     Boolean           @default(false)
+  notes            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String   // hashed
+  role      String   @default("admin")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
